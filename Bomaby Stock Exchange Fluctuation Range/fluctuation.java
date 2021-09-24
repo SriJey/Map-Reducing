@@ -1,0 +1,55 @@
+import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+public class fluctuation { 
+	public static class CountMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
+        @Override
+        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+            String[] words = value.toString().trim().split("-");
+            if(words.length<7||words==null){
+            	return;
+            }
+            try{
+            	float d1 = Float.parseFloat(words[3]);
+                float d2 = Float.parseFloat(words[6]);
+                float d3 = (d2-d1)/d1 *100;
+                String str = Math.floor(d3)+"% to "+Math.ceil(d3)+"%\t";
+                context.write(new Text(str),new IntWritable(1));         
+            }
+            catch(Exception e){
+            	return;
+            } 
+        }
+    }
+    public static class CountReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+        @Override
+        public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+            int sum = 0;
+            for (IntWritable value : values) {
+                sum += value.get();
+            }
+            context.write(key, new IntWritable(sum));
+        }    
+  }
+  public static void main(String[] args) throws Exception {
+	  Configuration configuration = new Configuration();
+      Job job = Job.getInstance(configuration, "Word Count");
+      job.setJarByClass(fluctuation.class);
+      job.setMapperClass(fluctuation.CountMapper.class);
+      job.setCombinerClass(fluctuation.CountReducer.class);
+      job.setReducerClass(fluctuation.CountReducer.class);
+      job.setOutputKeyClass(Text.class);
+      job.setOutputValueClass(IntWritable.class);
+      FileInputFormat.addInputPath(job, new Path(args[0]));
+      FileOutputFormat.setOutputPath(job, new Path(args[1]));
+      System.exit(job.waitForCompletion(true)? 0 : 1);
+  }
+}
